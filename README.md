@@ -66,9 +66,9 @@ Set `MONGODB_URI` in `backend/.env`. A local MongoDB URI works, or use MongoDB A
 Backend `.env`:
 ```env
 PORT=backend_port
-MONGODB_URI=mongodb_connection_url
-JWT_SECRET=replace-with-a-long-random-secret
-JWT_EXPIRES_IN=7d
+MONGODB_URI=your_mongodb_connection_url
+JWT_SECRET=your_jwt_key
+JWT_EXPIRES_IN=expiry_token_duration
 CLIENT_URL=your_frontend_url
 ADMIN_INVITE_CODE=admin_invite_code
 NODE_ENV=add_according_project
