@@ -1,0 +1,1 @@
+import { SignupPage } from './Auth'; export default SignupPage

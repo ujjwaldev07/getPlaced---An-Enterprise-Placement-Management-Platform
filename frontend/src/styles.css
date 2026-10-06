@@ -1,0 +1,279 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color-scheme: light;
+
+  /* SaaS Light Mode Architecture */
+  --background: #f6f8fb;
+  --foreground: #0f172a;
+
+  /* Surfaces */
+  --surface: #ffffff;
+  --surface-secondary: #f8fafc;
+  --surface-elevated: #ffffff;
+  --surface-muted: #f1f5f9;
+  --surface-hover: #f8fafc;
+
+  /* Borders */
+  --border: #e2e8f0;
+  --border-subtle: #edf2f7;
+  --border-strong: #cbd5e1;
+
+  /* Brand Accents */
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-soft: rgba(16, 185, 129, 0.09);
+  --primary-foreground: #ffffff;
+
+  /* Text & Hierarchy */
+  --secondary: #475569;
+  --secondary-foreground: #0f172a;
+  --muted: #64748b;
+  --muted-foreground: #94a3b8;
+
+  /* Feedback Colors */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
+
+  /* Realistic, Non-Hazy Shadows */
+  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.06), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
+  --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.06), 0 8px 10px -6px rgba(15, 23, 42, 0.02);
+
+  /* Glass Tokens for Light Mode: predominantly crisp solid with high contrast */
+  --glass-bg: #ffffff;
+  --glass-border: #e2e8f0;
+  --glass-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+
+  /* Legacy aliases for backward compatibility */
+  --surface-bg: var(--background);
+  --surface-fg: var(--foreground);
+  --surface-card: var(--surface);
+  --surface-border: var(--border);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* SaaS Dark Mode Architecture */
+  --background: #070e17;
+  --foreground: #f8fafc;
+
+  /* Surfaces */
+  --surface: #0d1520;
+  --surface-secondary: #111a26;
+  --surface-elevated: #142030;
+  --surface-muted: #182435;
+  --surface-hover: #162232;
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.09);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Brand Accents */
+  --primary: #10b981;
+  --primary-hover: #34d399;
+  --primary-soft: rgba(16, 185, 129, 0.16);
+  --primary-foreground: #070e17;
+
+  /* Text & Hierarchy */
+  --secondary: #94a3b8;
+  --secondary-foreground: #f8fafc;
+  --muted: #64748b;
+  --muted-foreground: #94a3b8;
+
+  /* Feedback Colors */
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #60a5fa;
+
+  /* Deep Sleek Dark Shadows */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px 0 rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 28px -4px rgba(0, 0, 0, 0.65);
+  --shadow-xl: 0 20px 45px -10px rgba(0, 0, 0, 0.8);
+
+  /* Glass Tokens for Dark Mode: subtle backdrop blur */
+  --glass-bg: rgba(13, 21, 32, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.6);
+
+  /* Legacy aliases */
+  --surface-bg: var(--background);
+  --surface-fg: var(--foreground);
+  --surface-card: var(--surface);
+  --surface-border: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  /* Cards: In Light Mode, solid crisp white with soft elevation shadow. In Dark Mode, translucent glass. */
+  .glass-card {
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-sm);
+    border-radius: 1.25rem;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  }
+
+  .dark .glass-card {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .glass-card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5;
+  }
+  .glass-card-hover:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-strong);
+  }
+
+  /* Panels (Navbars, sidebars, floating headers) */
+  .glass-panel {
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .page-container {
+    @apply min-h-[calc(100vh-65px)] p-4 sm:p-6 lg:p-8;
+  }
+
+  /* Navigation Links */
+  .sidebar-link {
+    @apply flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-150;
+    color: var(--secondary);
+  }
+
+  .sidebar-link:hover {
+    color: var(--foreground);
+    background-color: var(--surface-muted);
+  }
+
+  .dark .sidebar-link:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+  }
+
+  .sidebar-active {
+    @apply bg-emerald-500 font-bold text-white shadow-md shadow-emerald-500/25;
+  }
+  .dark .sidebar-active {
+    @apply bg-emerald-500 font-bold text-slate-950 shadow-md shadow-emerald-500/20;
+  }
+
+  /* Inputs & Form Elements */
+  .input {
+    @apply w-full rounded-xl border px-3.5 py-2.5 text-sm font-medium outline-none transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+    background-color: var(--surface);
+    border-color: var(--border-strong);
+    color: var(--foreground);
+  }
+  .input::placeholder {
+    color: var(--muted-foreground);
+  }
+  .input:hover:not(:disabled) {
+    border-color: #94a3b8;
+  }
+  .dark .input:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+  .input:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  }
+  .dark .input:focus {
+    border-color: #34d399;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-500/20 transition-all duration-150 hover:-translate-y-0.5 hover:bg-emerald-600 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0;
+  }
+  .dark .btn-primary {
+    @apply text-slate-950 font-black hover:bg-emerald-400;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold shadow-sm transition-all duration-150 active:translate-y-0;
+    background-color: var(--surface);
+    border-color: var(--border);
+    color: var(--foreground);
+  }
+  .btn-secondary:hover {
+    background-color: var(--surface-muted);
+    border-color: var(--border-strong);
+  }
+
+  .eyebrow {
+    @apply text-xs font-bold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400;
+  }
+
+  /* Skeleton Loading Utilities */
+  .skeleton {
+    @apply animate-pulse rounded-lg;
+    background-color: #e2e8f0;
+  }
+  .dark .skeleton {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* Subtle Ambient Meshes */
+.mesh {
+  background-image:
+    radial-gradient(circle at 10% 5%, rgba(16, 185, 129, 0.07), transparent 30%),
+    radial-gradient(circle at 90% 12%, rgba(59, 130, 246, 0.05), transparent 28%),
+    radial-gradient(circle at 50% 90%, rgba(16, 185, 129, 0.04), transparent 35%);
+}
+
+.dark .mesh {
+  background-image:
+    radial-gradient(circle at 15% 10%, rgba(16, 185, 129, 0.12), transparent 35%),
+    radial-gradient(circle at 90% 15%, rgba(59, 130, 246, 0.08), transparent 30%),
+    radial-gradient(circle at 60% 90%, rgba(16, 185, 129, 0.06), transparent 30%);
+}
+
+.mesh-brand {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.22), transparent 45%),
+    radial-gradient(circle at 85% 25%, rgba(59, 130, 246, 0.14), transparent 40%),
+    radial-gradient(circle at 50% 85%, rgba(16, 185, 129, 0.12), transparent 45%);
+}
