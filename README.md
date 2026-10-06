@@ -65,18 +65,18 @@ Set `MONGODB_URI` in `backend/.env`. A local MongoDB URI works, or use MongoDB A
 ## Environment
 Backend `.env`:
 ```env
-PORT=3000
-MONGODB_URI=mongodb://127.0.0.1:27017/getplaced
+PORT=backend_port
+MONGODB_URI=mongodb_connection_url
 JWT_SECRET=replace-with-a-long-random-secret
 JWT_EXPIRES_IN=7d
-CLIENT_URL=http://localhost:5173
-ADMIN_INVITE_CODE=GETPLACED-ADMIN-2026
-NODE_ENV=development
+CLIENT_URL=your_frontend_url
+ADMIN_INVITE_CODE=admin_invite_code
+NODE_ENV=add_according_project
 ```
 
 Frontend `.env`:
 ```env
-VITE_API_URL=http://localhost:3000/api
+VITE_API_URL=http:your_backend_url
 ```
 
 ## Demo admin
