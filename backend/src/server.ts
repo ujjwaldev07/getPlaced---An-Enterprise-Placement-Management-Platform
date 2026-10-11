@@ -19,7 +19,7 @@ app.use(
 )
 app.use(compression())
 const allowedOrigins = new Set(
-  [config.clientUrl, 'https://get-placed-an-enterprise-placement.vercel.app'].filter(Boolean),
+  [config.clientUrl, 'https://get-placed-an-enterprise-placement.vercel.app','http://localhost:5173'].filter(Boolean),
 )
 
 app.use(
