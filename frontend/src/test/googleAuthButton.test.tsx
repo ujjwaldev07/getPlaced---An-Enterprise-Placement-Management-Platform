@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 
 // The component captures the client ID at module load, so the environment
 // must be stubbed before the dynamic import below.
-vi.stubEnv('GOOGLE_CLIENT_ID', 'test-google-client-id')
+vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-google-client-id')
 
 const { default: GoogleAuthButton } = await import('../components/GoogleAuthButton')
 

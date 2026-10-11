@@ -36,7 +36,7 @@ declare global {
 }
 
 const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client'
-const CLIENT_ID = import.meta.env.GOOGLE_CLIENT_ID as string | undefined
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 
 let gisScriptLoaded = false
 let gisScriptPromise: Promise<void> | null = null
@@ -140,11 +140,28 @@ export default function GoogleAuthButton({
   }, [])
 
   const handleClick = async () => {
-    if (loading || disabled || scriptError || !CLIENT_ID) return
+    if (loading || disabled) return
+
+    if (!CLIENT_ID) {
+      const message =
+        'Google sign-in is not configured. Please check the frontend Google Client ID environment variable.'
+
+      console.error('[Google Sign-In]', message)
+      onErrorRef.current(message)
+      return
+    }
+
+    if (scriptError) {
+      const message = `Google sign-in could not initialize: ${scriptError}`
+
+      console.error('[Google Sign-In]', message)
+      onErrorRef.current(message)
+      return
+    }
 
     if (onBeforeAuth) {
-      const canProceed = await onBeforeAuth()
-      if (!canProceed) return
+      const shouldProceed = await onBeforeAuth()
+      if (!shouldProceed) return
     }
 
     if (!window.google?.accounts?.id) {
@@ -199,7 +216,7 @@ export default function GoogleAuthButton({
     })
   }
 
-  const isDisabled = disabled || loading || !!scriptError || !CLIENT_ID
+  const isDisabled = disabled || loading
 
   return (
     <button
