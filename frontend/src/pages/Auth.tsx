@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContextValue'
 import { getApiErrorMessage } from '../lib/api'
 import Logo from '../components/Logo'
 import ThemeToggle from '../components/ThemeToggle'
+import GoogleAuthButton from '../components/GoogleAuthButton'
 
 interface AuthCardProps {
   mode: 'login' | 'signup'
@@ -29,7 +30,7 @@ interface AuthCardProps {
 type Role = 'user' | 'admin'
 
 export function AuthCard({ mode }: AuthCardProps) {
-  const { login, signup } = useAuth()
+  const { login, signup, googleLogin } = useAuth()
   const navigate = useNavigate()
 
   const [role, setRole] = useState<Role>('user')
@@ -161,6 +162,59 @@ export function AuthCard({ mode }: AuthCardProps) {
     } finally {
       setBusy(false)
     }
+  }
+
+  const validateGoogleSignupFields = (): boolean => {
+    if (mode !== 'signup') return true
+    const errors: Record<string, string> = {}
+    if (role === 'user') {
+      if (!form.course.trim()) {
+        errors.course = 'Please specify your degree or course (e.g. B.Tech CSE).'
+      }
+      const gradYear = Number(form.graduationYear)
+      if (!form.graduationYear || isNaN(gradYear) || gradYear < 2020 || gradYear > 2035) {
+        errors.graduationYear = 'Enter a valid graduation year (e.g. 2026).'
+      }
+    } else if (role === 'admin') {
+      if (!form.adminCode.trim()) {
+        errors.adminCode = 'Admin invite authorization code is required.'
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errors }))
+      return false
+    }
+    return true
+  }
+
+  const handleGoogleSuccess = async (credential: string, googleRole: 'user' | 'admin') => {
+    setError('')
+    setBusy(true)
+    try {
+      const payload: Record<string, unknown> = {
+        credential,
+        role: googleRole,
+      }
+      if (mode === 'signup') {
+        if (googleRole === 'user') {
+          payload.course = form.course.trim()
+          payload.graduationYear = Number(form.graduationYear)
+        } else {
+          payload.adminCode = form.adminCode.trim()
+        }
+      }
+      const loggedInUser = await googleLogin(payload)
+      navigate(loggedInUser.role === 'admin' ? '/admin/dashboard' : '/app/dashboard')
+    } catch (err: unknown) {
+      const msg = getApiErrorMessage(err)
+      setError(msg)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleGoogleError = (message: string) => {
+    setError(message)
   }
 
   return (
@@ -378,6 +432,28 @@ export function AuthCard({ mode }: AuthCardProps) {
                 <p className="leading-snug">{error}</p>
               </motion.div>
             )}
+
+            {/* Google OAuth Button */}
+            <div className="mt-6">
+              <GoogleAuthButton
+                mode={mode}
+                role={role}
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+                onBeforeAuth={validateGoogleSignupFields}
+                disabled={busy}
+              />
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-200/80 dark:border-white/10" />
+                </div>
+                <div className="relative flex justify-center text-xs sm:text-sm">
+                  <span className="bg-slate-200/60 px-3 py-1 text-slate-500 dark:bg-white/[0.03] dark:text-slate-400 rounded-full">
+                    or continue with email
+                  </span>
+                </div>
+              </div>
+            </div>
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>

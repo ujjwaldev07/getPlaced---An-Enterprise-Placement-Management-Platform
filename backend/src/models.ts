@@ -13,6 +13,8 @@ const userSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     password: { type: String, required: true, select: false },
     role: { type: String, enum: ['user', 'admin'], default: 'user', index: true },
+    authProvider: { type: String, enum: ['local', 'google'], default: 'local', index: true },
+    googleId: { type: String, unique: true, sparse: true, index: true },
     avatar: { type: String },
     phone: { type: String },
     course: { type: String },

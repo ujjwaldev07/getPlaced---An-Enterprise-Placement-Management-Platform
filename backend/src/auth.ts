@@ -1,11 +1,68 @@
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import { OAuth2Client } from 'google-auth-library'
 import type { Request, Response, NextFunction } from 'express'
 import { config } from './config.js'
 import { User } from './models.js'
 
 export interface AuthRequest extends Request {
   user?: { id: string; role: 'user' | 'admin' }
+}
+
+const googleClient = new OAuth2Client(config.googleClientId)
+
+export interface GooglePayload {
+  sub: string
+  email: string
+  email_verified: boolean
+  name: string
+  given_name?: string
+  family_name?: string
+  picture?: string
+  locale?: string
+}
+
+export async function verifyGoogleIdToken(credential: string): Promise<GooglePayload> {
+  if (!config.googleClientId) {
+    throw new Error('Google Client ID not configured on server')
+  }
+
+  const ticket = await googleClient.verifyIdToken({
+    idToken: credential,
+    audience: config.googleClientId,
+  })
+
+  const payload = ticket.getPayload()
+  if (!payload) {
+    throw new Error('Invalid Google token: no payload')
+  }
+
+  if (!payload.email_verified) {
+    throw new Error('Google account email is not verified')
+  }
+
+  if (!payload.email) {
+    throw new Error('Google token missing email')
+  }
+
+  if (!payload.sub) {
+    throw new Error('Google token missing subject')
+  }
+
+  if (!payload.name) {
+    throw new Error('Google token missing name')
+  }
+
+  return {
+    sub: payload.sub,
+    email: payload.email.toLowerCase(),
+    email_verified: payload.email_verified,
+    name: payload.name,
+    given_name: payload.given_name,
+    family_name: payload.family_name,
+    picture: payload.picture,
+    locale: payload.locale,
+  }
 }
 
 export async function hashPassword(password: string) {

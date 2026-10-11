@@ -1,7 +1,44 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
 import { config } from './config.js';
 import { User } from './models.js';
+const googleClient = new OAuth2Client(config.googleClientId);
+export async function verifyGoogleIdToken(credential) {
+    if (!config.googleClientId) {
+        throw new Error('Google Client ID not configured on server');
+    }
+    const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: config.googleClientId,
+    });
+    const payload = ticket.getPayload();
+    if (!payload) {
+        throw new Error('Invalid Google token: no payload');
+    }
+    if (!payload.email_verified) {
+        throw new Error('Google account email is not verified');
+    }
+    if (!payload.email) {
+        throw new Error('Google token missing email');
+    }
+    if (!payload.sub) {
+        throw new Error('Google token missing subject');
+    }
+    if (!payload.name) {
+        throw new Error('Google token missing name');
+    }
+    return {
+        sub: payload.sub,
+        email: payload.email.toLowerCase(),
+        email_verified: payload.email_verified,
+        name: payload.name,
+        given_name: payload.given_name,
+        family_name: payload.family_name,
+        picture: payload.picture,
+        locale: payload.locale,
+    };
+}
 export async function hashPassword(password) {
     return bcrypt.hash(password, 12);
 }

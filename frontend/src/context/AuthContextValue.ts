@@ -7,6 +7,7 @@ interface AuthContextValue {
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<User>
   signup: (payload: Record<string, unknown>) => Promise<User>
+  googleLogin: (payload: Record<string, unknown>) => Promise<User>
   logout: () => Promise<void>
   refresh: () => Promise<void>
 }

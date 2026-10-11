@@ -49,6 +49,48 @@ export const loginSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters').max(128),
 })
 
+export const googleAuthSchema = z
+  .object({
+    credential: z.string().min(1, 'Google credential is required'),
+    role: z.enum(['user', 'admin']).default('user'),
+    course: z.string().optional(),
+    graduationYear: z
+      .union([z.number(), z.string()])
+      .optional()
+      .transform((val) => {
+        if (val === undefined || val === null || val === '') return undefined
+        const num = Number(val)
+        return isNaN(num) ? undefined : num
+      }),
+    adminCode: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === 'admin') {
+      if (!data.adminCode || data.adminCode.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['adminCode'],
+          message: 'Admin invite code is required',
+        })
+      }
+    } else {
+      if (!data.course || data.course.trim().length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['course'],
+          message: 'Course is required for student registration (e.g. B.Tech CSE)',
+        })
+      }
+      if (data.graduationYear === undefined || data.graduationYear < 2020 || data.graduationYear > 2035) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['graduationYear'],
+          message: 'Valid graduation year is required (e.g. 2026)',
+        })
+      }
+    }
+  })
+
 export const companySchema = z.object({
   name: z.string().trim().min(2, 'Company name is required').max(120),
   logo: z.string().trim().optional().or(z.literal('')),

@@ -65,6 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return newUser
   }
 
+  const googleLogin = async (payload: Record<string, unknown>): Promise<User> => {
+    const { data } = await api.post('/auth/google', payload)
+    if (data?.token) {
+      saveSession(data.token)
+    }
+    const loggedInUser = data.user as User
+    setUser(loggedInUser)
+    return loggedInUser
+  }
+
   const logout = async () => {
     try {
       await api.post('/auth/logout')
@@ -84,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         login,
         signup,
+        googleLogin,
         logout,
         refresh,
       }}

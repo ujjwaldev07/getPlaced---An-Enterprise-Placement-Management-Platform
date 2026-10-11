@@ -9,9 +9,12 @@ import {
   setAuthCookie,
   signToken,
   type AuthRequest,
+  verifyGoogleIdToken,
+  type GooglePayload,
 } from './auth.js'
 import { config } from './config.js'
-import { loginSchema, registerSchema } from './validation.js'
+import { loginSchema, registerSchema, googleAuthSchema } from './validation.js'
+import crypto from 'node:crypto'
 import { companiesRouter } from './routers/companies.js'
 import { drivesRouter } from './routers/drives.js'
 import { applicationsRouter } from './routers/applications.js'
@@ -107,6 +110,89 @@ router.post('/auth/logout', (_, res) => {
     secure: config.nodeEnv === 'production',
   })
   res.json({ ok: true })
+})
+
+router.post('/auth/google', async (req, res) => {
+  try {
+    const body = googleAuthSchema.parse(req.body)
+
+    const googlePayload = await verifyGoogleIdToken(body.credential)
+    const email = googlePayload.email
+    const googleId = googlePayload.sub
+    const name = googlePayload.name
+
+    const existingByGoogleId = await User.findOne({ googleId })
+    if (existingByGoogleId) {
+      if (existingByGoogleId.role !== body.role) {
+        return res.status(403).json({
+          message:
+            body.role === 'admin'
+              ? 'This Google account is registered as a student. Please switch to Student login.'
+              : 'This Google account is registered as an admin. Please switch to Admin login.',
+        })
+      }
+      const token = signToken(existingByGoogleId)
+      setAuthCookie(res, token)
+      return res.json({ token, user: publicUser(existingByGoogleId) })
+    }
+
+    const existingByEmail = await User.findOne({ email })
+    if (existingByEmail) {
+      return res.status(409).json({
+        message:
+          'An account with this email already exists. Please sign in with your password, or link your Google account from account settings.',
+      })
+    }
+
+    if (body.role === 'admin' && body.adminCode !== config.adminCode) {
+      return res.status(403).json({ message: 'Invalid admin invite code' })
+    }
+
+    let userData: any
+    const randomPassword = crypto.randomBytes(32).toString('hex')
+    const hashedPassword = await hashPassword(randomPassword)
+
+    if (body.role === 'admin') {
+      userData = {
+        name: name.trim(),
+        email,
+        password: hashedPassword,
+        role: 'admin' as const,
+        authProvider: 'google' as const,
+        googleId,
+      }
+    } else {
+      userData = {
+        name: name.trim(),
+        email,
+        password: hashedPassword,
+        role: 'user' as const,
+        authProvider: 'google' as const,
+        googleId,
+        course: body.course?.trim(),
+        graduationYear: body.graduationYear,
+      }
+    }
+
+    const user = await User.create(userData)
+    const token = signToken(user)
+    setAuthCookie(res, token)
+    return res.status(201).json({ token, user: publicUser(user) })
+  } catch (e: any) {
+    if (e?.issues?.length) {
+      return res.status(400).json({
+        message: e.issues[0].message || 'Validation failed',
+        field: e.issues[0].path?.[0],
+      })
+    }
+    if (e?.message?.includes('Google')) {
+      return res.status(401).json({ message: e.message })
+    }
+    // Unexpected failure: record the real cause in server logs while
+    // returning a sanitized, non-leaking message to the client.
+    console.error('Google authentication failed', e)
+    return res.status(400).json({ message: 'Google authentication failed' })
+  }
 })
 
 router.get('/auth/me', requireAuth, async (req: AuthRequest, res) => {
