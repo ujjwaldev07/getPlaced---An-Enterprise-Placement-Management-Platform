@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, waitFor } from '@testing-library/react'
+// Registers the jest-dom matcher types used below; the runtime matchers are
+// already installed by src/test/setup.ts.
+import '@testing-library/jest-dom/vitest'
 
 // The component captures the client ID at module load, so the environment
 // must be stubbed before the dynamic import below.
@@ -9,19 +11,12 @@ vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-google-client-id')
 const { default: GoogleAuthButton } = await import('../components/GoogleAuthButton')
 
 const initializeMock = vi.fn()
-const promptMock = vi.fn()
+const renderGoogleButtonMock = vi.fn()
 const disableAutoSelectMock = vi.fn()
-
-type GisNotification = {
-  isNotDisplayed: () => boolean
-  isSkippedMoment: () => boolean
-  getNotDisplayedReason: () => string
-  getSkippedReason: () => string
-}
 
 beforeEach(() => {
   initializeMock.mockClear()
-  promptMock.mockClear()
+  renderGoogleButtonMock.mockClear()
   disableAutoSelectMock.mockClear()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -29,7 +24,7 @@ beforeEach(() => {
     accounts: {
       id: {
         initialize: initializeMock,
-        prompt: promptMock,
+        renderButton: renderGoogleButtonMock,
         disableAutoSelect: disableAutoSelectMock,
       },
     },
@@ -37,7 +32,7 @@ beforeEach(() => {
 })
 
 function renderButton(props?: {
-  onSuccess?: (credential: string, role: 'user' | 'admin') => void
+  onSuccess?: (credential: string, role: 'user' | 'admin') => void | Promise<void>
   onError?: (message: string) => void
 }) {
   const utils = render(
@@ -51,50 +46,23 @@ function renderButton(props?: {
   return utils
 }
 
-async function clickAndGetPromptCallback() {
-  await waitFor(() => {
-    expect(initializeMock).toHaveBeenCalled()
-  })
-  await userEvent.click(screen.getByRole('button', { name: /continue with google/i }))
-  await waitFor(() => {
-    expect(promptMock).toHaveBeenCalled()
-  })
-  return promptMock.mock.calls[0][0] as (notification: GisNotification) => void
-}
-
 describe('GoogleAuthButton', () => {
-  it('initializes Google Identity Services with the configured client ID', async () => {
+  it('initializes the supported FedCM button flow with the configured client ID', async () => {
     renderButton()
 
     await waitFor(() => {
       expect(initializeMock).toHaveBeenCalledWith(
-        expect.objectContaining({ client_id: 'test-google-client-id' }),
+        expect.objectContaining({
+          client_id: 'test-google-client-id',
+          use_fedcm_for_button: true,
+          auto_select: false,
+        }),
+      )
+      expect(renderGoogleButtonMock).toHaveBeenCalledWith(
+        expect.any(HTMLDivElement),
+        expect.objectContaining({ text: 'continue_with' }),
       )
     })
-  })
-
-  it('starts the Google prompt when clicked', async () => {
-    const onBeforeAuth = vi.fn(() => true)
-    render(
-      <GoogleAuthButton
-        mode="login"
-        role="user"
-        onSuccess={vi.fn()}
-        onError={vi.fn()}
-        onBeforeAuth={onBeforeAuth}
-      />,
-    )
-
-    await waitFor(() => {
-      expect(initializeMock).toHaveBeenCalled()
-    })
-
-    await userEvent.click(screen.getByRole('button', { name: /continue with google/i }))
-
-    await waitFor(() => {
-      expect(promptMock).toHaveBeenCalled()
-    })
-    expect(onBeforeAuth).toHaveBeenCalled()
   })
 
   it('delivers the Google credential to onSuccess with the selected role', async () => {
@@ -116,7 +84,7 @@ describe('GoogleAuthButton', () => {
     const initConfig = initializeMock.mock.calls[0][0] as {
       callback: (response: { credential: string }) => void
     }
-    initConfig.callback({ credential: 'google-id-token' })
+    await initConfig.callback({ credential: 'google-id-token' })
 
     await waitFor(() => {
       expect(onSuccess).toHaveBeenCalledWith('google-id-token', 'admin')
@@ -124,56 +92,48 @@ describe('GoogleAuthButton', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
-  it('surfaces the GIS reason when the prompt cannot be displayed', async () => {
-    const onError = vi.fn()
-    renderButton({ onError })
+  it('validates sign-up details before passing the credential to the API', async () => {
+    const onBeforeAuth = vi.fn(() => false)
+    const onSuccess = vi.fn()
+    render(
+      <GoogleAuthButton
+        mode="signup"
+        role="user"
+        onSuccess={onSuccess}
+        onError={vi.fn()}
+        onBeforeAuth={onBeforeAuth}
+      />,
+    )
 
-    const notify = await clickAndGetPromptCallback()
-    notify({
-      isNotDisplayed: () => true,
-      isSkippedMoment: () => false,
-      getNotDisplayedReason: () => 'origin_not_allowed',
-      getSkippedReason: () => '',
-    })
+    await waitFor(() => expect(initializeMock).toHaveBeenCalled())
+    const initConfig = initializeMock.mock.calls[0][0] as {
+      callback: (response: { credential: string }) => Promise<void>
+    }
+    await initConfig.callback({ credential: 'google-id-token' })
 
-    await waitFor(() => {
-      expect(onError).toHaveBeenCalledWith(
-        expect.stringContaining('origin_not_allowed'),
-      )
-    })
+    expect(onBeforeAuth).toHaveBeenCalledTimes(1)
+    expect(onSuccess).not.toHaveBeenCalled()
   })
 
-  it('does not show an error when the user deliberately dismisses the prompt', async () => {
-    const onError = vi.fn()
-    renderButton({ onError })
+  it('submits a GIS credential only once while the API request is in flight', async () => {
+    let finishSubmission: () => void = () => {}
+    const onSuccess = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSubmission = resolve
+        }),
+    )
+    renderButton({ onSuccess })
 
-    const notify = await clickAndGetPromptCallback()
-    notify({
-      isNotDisplayed: () => false,
-      isSkippedMoment: () => true,
-      getNotDisplayedReason: () => '',
-      getSkippedReason: () => 'tap_outside',
-    })
+    await waitFor(() => expect(initializeMock).toHaveBeenCalled())
+    const initConfig = initializeMock.mock.calls[0][0] as {
+      callback: (response: { credential: string }) => Promise<void>
+    }
+    const first = initConfig.callback({ credential: 'google-id-token' })
+    const second = initConfig.callback({ credential: 'google-id-token' })
 
-    expect(onError).not.toHaveBeenCalled()
-  })
-
-  it('reports an interrupted (auto-cancelled) sign-in as an error', async () => {
-    const onError = vi.fn()
-    renderButton({ onError })
-
-    const notify = await clickAndGetPromptCallback()
-    notify({
-      isNotDisplayed: () => false,
-      isSkippedMoment: () => true,
-      getNotDisplayedReason: () => '',
-      getSkippedReason: () => 'auto_cancel',
-    })
-
-    await waitFor(() => {
-      expect(onError).toHaveBeenCalledWith(
-        expect.stringContaining('interrupted'),
-      )
-    })
+    expect(onSuccess).toHaveBeenCalledTimes(1)
+    finishSubmission()
+    await Promise.all([first, second])
   })
 })

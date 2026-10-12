@@ -8,7 +8,10 @@ export const config = {
   jwtExpires: process.env.JWT_EXPIRES_IN || '7d',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   adminCode: process.env.ADMIN_INVITE_CODE || 'GETPLACED-ADMIN-2026',
-  googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || '642263078830-iblbdsheos2g8u36k1g0trc337n1nn9d.apps.googleusercontent.com',
+  // VITE_* variables are exposed to browser bundles. Prefer the backend-only
+  // name here while retaining the existing development name as a safe
+  // compatibility fallback.
+  googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '',
   nodeEnv: process.env.NODE_ENV || 'development',
   resumeMaxBytes: Number(process.env.RESUME_MAX_BYTES || 5 * 1024 * 1024),
   uploadDir: process.env.UPLOAD_DIR || path.resolve(process.cwd(), 'uploads', 'resumes'),

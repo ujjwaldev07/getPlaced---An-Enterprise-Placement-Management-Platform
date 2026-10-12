@@ -51,7 +51,7 @@ export const loginSchema = z.object({
 
 export const googleAuthSchema = z
   .object({
-    credential: z.string().min(1, 'Google credential is required'),
+    credential: z.string({ required_error: 'Google credential is required' }).min(1, 'Google credential is required'),
     role: z.enum(['user', 'admin']).default('user'),
     course: z.string().optional(),
     graduationYear: z
@@ -64,6 +64,11 @@ export const googleAuthSchema = z
       }),
     adminCode: z.string().optional(),
   })
+
+// Google sign-in needs only a verified credential and the requested portal
+// role. Registration-only fields are deliberately validated after the route
+// has established that this is a first-time Google account.
+export const googleRegistrationSchema = googleAuthSchema
   .superRefine((data, ctx) => {
     if (data.role === 'admin') {
       if (!data.adminCode || data.adminCode.trim().length === 0) {

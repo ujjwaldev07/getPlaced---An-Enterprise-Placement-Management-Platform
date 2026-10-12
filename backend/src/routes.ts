@@ -13,7 +13,7 @@ import {
   type GooglePayload,
 } from './auth.js'
 import { config } from './config.js'
-import { loginSchema, registerSchema, googleAuthSchema } from './validation.js'
+import { loginSchema, registerSchema, googleAuthSchema, googleRegistrationSchema } from './validation.js'
 import crypto from 'node:crypto'
 import { companiesRouter } from './routers/companies.js'
 import { drivesRouter } from './routers/drives.js'
@@ -116,7 +116,17 @@ router.post('/auth/google', async (req, res) => {
   try {
     const body = googleAuthSchema.parse(req.body)
 
-    const googlePayload = await verifyGoogleIdToken(body.credential)
+    let googlePayload: GooglePayload
+    try {
+      googlePayload = await verifyGoogleIdToken(body.credential)
+    } catch {
+      // A credential that cannot be verified is always a 401, never a 400
+      // validation error. The thrown error is neither logged nor echoed:
+      // google-auth-library embeds the raw ID token and its decoded claims
+      // in verification failure messages.
+      return res.status(401).json({ message: 'Google credential could not be verified' })
+    }
+
     const email = googlePayload.email
     const googleId = googlePayload.sub
     const name = googlePayload.name
@@ -144,7 +154,12 @@ router.post('/auth/google', async (req, res) => {
       })
     }
 
-    if (body.role === 'admin' && body.adminCode !== config.adminCode) {
+    // Course/year and invite-code requirements apply only while creating a
+    // new Google account. Existing accounts above must be able to sign in
+    // without re-submitting registration-only details.
+    const registration = googleRegistrationSchema.parse(body)
+
+    if (registration.role === 'admin' && registration.adminCode !== config.adminCode) {
       return res.status(403).json({ message: 'Invalid admin invite code' })
     }
 
@@ -152,7 +167,7 @@ router.post('/auth/google', async (req, res) => {
     const randomPassword = crypto.randomBytes(32).toString('hex')
     const hashedPassword = await hashPassword(randomPassword)
 
-    if (body.role === 'admin') {
+    if (registration.role === 'admin') {
       userData = {
         name: name.trim(),
         email,
@@ -169,8 +184,8 @@ router.post('/auth/google', async (req, res) => {
         role: 'user' as const,
         authProvider: 'google' as const,
         googleId,
-        course: body.course?.trim(),
-        graduationYear: body.graduationYear,
+        course: registration.course?.trim(),
+        graduationYear: registration.graduationYear,
       }
     }
 
@@ -185,11 +200,9 @@ router.post('/auth/google', async (req, res) => {
         field: e.issues[0].path?.[0],
       })
     }
-    if (e?.message?.includes('Google')) {
-      return res.status(401).json({ message: e.message })
-    }
     // Unexpected failure: record the real cause in server logs while
-    // returning a sanitized, non-leaking message to the client.
+    // returning a sanitized, non-leaking message to the client. Credential
+    // verification failures are handled above and never reach this branch.
     console.error('Google authentication failed', e)
     return res.status(400).json({ message: 'Google authentication failed' })
   }

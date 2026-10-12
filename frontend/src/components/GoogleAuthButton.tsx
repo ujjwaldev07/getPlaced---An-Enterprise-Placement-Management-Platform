@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import GoogleIcon from './GoogleIcon'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 interface GoogleAuthButtonProps {
   mode: 'login' | 'signup'
   role: 'user' | 'admin'
-  onSuccess: (credential: string, role: 'user' | 'admin') => void
+  onSuccess: (credential: string, role: 'user' | 'admin') => void | Promise<void>
   onError: (message: string) => void
   onBeforeAuth?: () => boolean | Promise<boolean>
   children?: ReactNode
@@ -17,14 +16,14 @@ declare global {
     google?: {
       accounts: {
         id: {
-          initialize: (config: { client_id: string; callback: (response: { credential: string }) => void; auto_select?: boolean; cancel_on_tap_outside?: boolean }) => void
-          prompt: (notificationCallback?: (notification: {
-            isNotDisplayed: () => boolean
-            isSkippedMoment: () => boolean
-            getNotDisplayedReason: () => string
-            getSkippedReason: () => string
-          }) => void) => void
-          renderButton: (parent: HTMLElement, options: { theme?: string; size?: string; type?: string; text?: string; shape?: string; logo_alignment?: string; width?: string }) => void
+          initialize: (config: {
+            client_id: string
+            callback: (response: { credential: string }) => void
+            auto_select?: boolean
+            cancel_on_tap_outside?: boolean
+            use_fedcm_for_button?: boolean
+          }) => void
+          renderButton: (parent: HTMLElement, options: { theme?: string; size?: string; type?: string; text?: string; shape?: string; logo_alignment?: string; width?: number }) => void
           disableAutoSelect: () => void
         }
         oauth2: {
@@ -75,59 +74,77 @@ function loadGISScript(): Promise<void> {
 }
 
 export default function GoogleAuthButton({
-  mode,
   role,
   onSuccess,
   onError,
   onBeforeAuth,
-  children,
   disabled = false,
   className = '',
 }: GoogleAuthButtonProps) {
-  const [loading, setLoading] = useState(false)
-  const [scriptError, setScriptError] = useState<string | null>(() =>
-    !CLIENT_ID ? 'Google Client ID not configured' : null,
-  )
-  const buttonRef = useRef<HTMLButtonElement>(null)
+  const googleButtonRef = useRef<HTMLDivElement>(null)
   const roleRef = useRef(role)
-  const modeRef = useRef(mode)
   const onSuccessRef = useRef(onSuccess)
   const onErrorRef = useRef(onError)
+  const onBeforeAuthRef = useRef(onBeforeAuth)
+  const submittingRef = useRef(false)
 
   useEffect(() => {
     roleRef.current = role
-    modeRef.current = mode
     onSuccessRef.current = onSuccess
     onErrorRef.current = onError
-  }, [role, mode, onSuccess, onError])
+    onBeforeAuthRef.current = onBeforeAuth
+  }, [role, onSuccess, onError, onBeforeAuth])
 
   useEffect(() => {
-    if (!CLIENT_ID) return
+    if (!CLIENT_ID) {
+      onErrorRef.current(
+        'Google sign-in is not configured. Please check the frontend Google Client ID environment variable.',
+      )
+      return
+    }
 
     let cancelled = false
     loadGISScript()
       .then(() => {
         if (cancelled) return
         if (!window.google?.accounts?.id) {
-          setScriptError('Google Identity Services failed to initialize')
+          onErrorRef.current('Google Identity Services failed to initialize')
           return
         }
 
         window.google.accounts.id.initialize({
           client_id: CLIENT_ID,
-          callback: (response) => {
-            if (response.credential) {
-              setLoading(false)
-              onSuccessRef.current(response.credential, roleRef.current)
+          callback: async (response) => {
+            if (response.credential && !submittingRef.current) {
+              submittingRef.current = true
+              try {
+                const shouldProceed = await onBeforeAuthRef.current?.()
+                if (shouldProceed === false) return
+                await onSuccessRef.current(response.credential, roleRef.current)
+              } finally {
+                submittingRef.current = false
+              }
             }
           },
           auto_select: false,
           cancel_on_tap_outside: true,
+          use_fedcm_for_button: true,
         })
+
+        if (googleButtonRef.current) {
+          window.google.accounts.id.renderButton(googleButtonRef.current, {
+            theme: 'outline',
+            size: 'large',
+            text: 'continue_with',
+            shape: 'rectangular',
+            logo_alignment: 'left',
+            width: Math.floor(googleButtonRef.current.getBoundingClientRect().width),
+          })
+        }
       })
       .catch((err) => {
         if (!cancelled) {
-          setScriptError(err.message)
+          onErrorRef.current(`Google sign-in could not initialize: ${err.message}`)
         }
       })
 
@@ -139,108 +156,12 @@ export default function GoogleAuthButton({
     }
   }, [])
 
-  const handleClick = async () => {
-    if (loading || disabled) return
-
-    if (!CLIENT_ID) {
-      const message =
-        'Google sign-in is not configured. Please check the frontend Google Client ID environment variable.'
-
-      console.error('[Google Sign-In]', message)
-      onErrorRef.current(message)
-      return
-    }
-
-    if (scriptError) {
-      const message = `Google sign-in could not initialize: ${scriptError}`
-
-      console.error('[Google Sign-In]', message)
-      onErrorRef.current(message)
-      return
-    }
-
-    if (onBeforeAuth) {
-      const shouldProceed = await onBeforeAuth()
-      if (!shouldProceed) return
-    }
-
-    if (!window.google?.accounts?.id) {
-      try {
-        await loadGISScript()
-      } catch {
-        onErrorRef.current('Google sign-in is temporarily unavailable. Please try again later.')
-        return
-      }
-    }
-
-    if (!window.google?.accounts?.id) {
-      onErrorRef.current('Google sign-in is temporarily unavailable. Please try again later.')
-      return
-    }
-
-    setLoading(true)
-
-    window.google.accounts.id.prompt((notification) => {
-      if (notification.isNotDisplayed()) {
-        const reason = notification.getNotDisplayedReason()
-        setLoading(false)
-        // Surface the real GIS reason (e.g. origin_not_allowed, invalid_client)
-        // in the browser console and the error banner so the failure is diagnosable.
-        console.warn('[Google Sign-In] Prompt not displayed. Reason:', reason)
-        if (reason === 'browser_not_supported') {
-          onErrorRef.current('Google sign-in is not supported in this browser.')
-        } else {
-          onErrorRef.current(
-            `Google sign-in could not be started (${reason}). Check that the Google Client ID is valid and this site's origin is authorized in Google Cloud Console.`,
-          )
-        }
-        return
-      }
-
-      if (notification.isSkippedMoment()) {
-        const reason = notification.getSkippedReason()
-        setLoading(false)
-        if (reason === 'user_cancelled' || reason === 'tap_outside') {
-          // The user deliberately dismissed the prompt. This is expected
-          // behavior, not an error, so no error banner is shown.
-          console.info('[Google Sign-In] Dismissed by user. Reason:', reason)
-          return
-        }
-        console.warn('[Google Sign-In] Prompt skipped. Reason:', reason)
-        onErrorRef.current(
-          reason === 'auto_cancel'
-            ? 'Google sign-in was interrupted before completing. Please try again.'
-            : `Google sign-in was not completed (${reason}). Please try again.`,
-        )
-      }
-    })
-  }
-
-  const isDisabled = disabled || loading
-
   return (
-    <button
-      ref={buttonRef}
-      type="button"
-      onClick={handleClick}
-      disabled={isDisabled}
-      className={`btn-secondary w-full py-3.5 text-sm font-bold transition-all ${className} ${
-        isDisabled ? 'opacity-50 cursor-not-allowed' : ''
-      }`}
+    <div
+      ref={googleButtonRef}
+      className={`w-full min-h-[48px] ${className} ${disabled ? 'pointer-events-none opacity-50' : ''}`}
       aria-label={`Continue with Google as ${role === 'user' ? 'Student' : 'Admin'}`}
-      aria-busy={loading}
-    >
-      {loading ? (
-        <>
-          <span className="animate-spin inline-block h-5 w-5 border-2 border-current border-t-transparent rounded-full" aria-hidden="true" />
-          <span>Authenticating...</span>
-        </>
-      ) : (
-        <>
-          <GoogleIcon size={20} className="shrink-0" />
-          <span>{children || 'Continue with Google'}</span>
-        </>
-      )}
-    </button>
+      aria-busy={disabled}
+    />
   )
 }

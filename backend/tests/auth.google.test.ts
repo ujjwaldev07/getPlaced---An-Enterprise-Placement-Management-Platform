@@ -174,6 +174,68 @@ describe('POST /api/auth/google', () => {
     expect(UserModel.create).toHaveBeenCalledTimes(1)
   })
 
+  it('allows an existing student to sign in without registration-only fields', async () => {
+    users.push({
+      _id: 'existing-student',
+      name: 'Google Student',
+      email: 'google-user@example.com',
+      password: 'hashed',
+      role: 'user',
+      authProvider: 'google',
+      googleId: 'google-sub-001',
+      course: 'B.Tech CSE',
+      graduationYear: 2026,
+    })
+
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({ credential: 'fake-id-token', role: 'user' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.user.id).toBe('existing-student')
+    expect(UserModel.create).not.toHaveBeenCalled()
+  })
+
+  it('allows an existing admin to sign in without an invite code', async () => {
+    users.push({
+      _id: 'existing-admin',
+      name: 'Google Admin',
+      email: 'google-user@example.com',
+      password: 'hashed',
+      role: 'admin',
+      authProvider: 'google',
+      googleId: 'google-sub-001',
+    })
+
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({ credential: 'fake-id-token', role: 'admin' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.user.id).toBe('existing-admin')
+    expect(UserModel.create).not.toHaveBeenCalled()
+  })
+
+  it('still requires course details for a new Google student', async () => {
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({ credential: 'fake-id-token', role: 'user', graduationYear: 2026 })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toContain('Course is required')
+    expect(users).toHaveLength(0)
+  })
+
+  it('still requires an invite code for a new Google admin', async () => {
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({ credential: 'fake-id-token', role: 'admin' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toBe('Admin invite code is required')
+    expect(users).toHaveLength(0)
+  })
+
   it('rejects admin creation via Google without a valid invite code', async () => {
     const res = await request(app)
       .post('/api/auth/google')
@@ -213,6 +275,92 @@ describe('POST /api/auth/google', () => {
 
     expect(res.status).toBe(401)
     expect(users).toHaveLength(0)
+  })
+
+  it('rejects a request with no Google credential before verification', async () => {
+    const res = await request(app).post('/api/auth/google').send({ role: 'user' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toBe('Google credential is required')
+    expect(verifyMock).not.toHaveBeenCalled()
+    expect(users).toHaveLength(0)
+  })
+
+  it('rejects expired or wrong-audience Google credentials', async () => {
+    verifyMock.mockRejectedValueOnce(new Error('Google token audience mismatch'))
+
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({ credential: 'wrong-audience-token', role: 'user' })
+
+    expect(res.status).toBe(401)
+    expect(users).toHaveLength(0)
+  })
+
+  it('classifies issuer, audience and expiry failures as 401 without leaking the credential', async () => {
+    verifyMock.mockRejectedValueOnce(
+      new Error(
+        'Invalid issuer, expected one of [accounts.google.com, https://accounts.google.com], but got https://evil.example.com',
+      ),
+    )
+
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({ credential: 'forged-id-token-value', role: 'user' })
+
+    expect(res.status).toBe(401)
+    expect(JSON.stringify(res.body)).not.toContain('forged-id-token-value')
+    expect(users).toHaveLength(0)
+    expect(UserModel.create).not.toHaveBeenCalled()
+  })
+
+  it('does not link a Google credential to an existing password account', async () => {
+    users.push({
+      _id: 'seed-local-2',
+      name: 'Password Student',
+      email: 'google-user@example.com',
+      password: 'hashed',
+      role: 'user',
+      authProvider: 'local',
+      course: 'B.Tech CSE',
+      graduationYear: 2026,
+    })
+
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({
+        credential: 'fake-id-token',
+        role: 'user',
+        course: 'B.Tech CSE',
+        graduationYear: 2026,
+      })
+
+    expect(res.status).toBe(409)
+    expect(users[0].authProvider).toBe('local')
+    expect(users[0].googleId).toBeUndefined()
+  })
+
+  it('never elevates an existing Google student to admin through the role field', async () => {
+    users.push({
+      _id: 'seed-student-no-code',
+      name: 'Google Student',
+      email: 'google-user@example.com',
+      password: 'hashed',
+      role: 'user',
+      authProvider: 'google',
+      googleId: 'google-sub-001',
+      course: 'B.Tech CSE',
+      graduationYear: 2026,
+    })
+
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({ credential: 'fake-id-token', role: 'admin', adminCode: config.adminCode })
+
+    expect(res.status).toBe(403)
+    expect(users).toHaveLength(1)
+    expect(users[0].role).toBe('user')
+    expect(UserModel.create).not.toHaveBeenCalled()
   })
 
   it('rejects Google sign-in when the email already has a password account', async () => {
@@ -255,6 +403,26 @@ describe('POST /api/auth/google', () => {
 
     expect(res.status).toBe(403)
     expect(res.body.message).toContain('registered as a student')
+    expect(users).toHaveLength(1)
+  })
+
+  it('rejects a role change before considering student registration fields', async () => {
+    users.push({
+      _id: 'seed-admin',
+      name: 'Google Admin',
+      email: 'google-user@example.com',
+      password: 'hashed',
+      role: 'admin',
+      authProvider: 'google',
+      googleId: 'google-sub-001',
+    })
+
+    const res = await request(app)
+      .post('/api/auth/google')
+      .send({ credential: 'fake-id-token', role: 'user' })
+
+    expect(res.status).toBe(403)
+    expect(res.body.message).toContain('registered as an admin')
     expect(users).toHaveLength(1)
   })
 })
