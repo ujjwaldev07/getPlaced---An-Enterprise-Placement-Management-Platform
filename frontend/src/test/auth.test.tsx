@@ -16,22 +16,22 @@ vi.mock('../lib/api', () => ({
   getToken: vi.fn(() => null),
 }))
 
-function GoogleLoginConsumer() {
-  const { googleLogin, user } = useAuth()
+function EmailLoginConsumer() {
+  const { login, user } = useAuth()
   return (
     <div>
       <button
         type="button"
-        onClick={() => void googleLogin({ credential: 'id-token', role: 'user' })}
+        onClick={() => void login('test@example.com', 'password123')}
       >
-        sign-in-with-google
+        login-with-email
       </button>
       <span data-testid="current-user">{user ? user.email : 'anonymous'}</span>
     </div>
   )
 }
 
-describe('AuthContext.googleLogin', () => {
+describe('AuthContext.login', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(api.post).mockResolvedValue({
@@ -39,8 +39,8 @@ describe('AuthContext.googleLogin', () => {
         token: 'jwt-token',
         user: {
           id: 'u1',
-          name: 'Google User',
-          email: 'google@example.com',
+          name: 'Local User',
+          email: 'local@example.com',
           role: 'user',
         },
       },
@@ -50,19 +50,19 @@ describe('AuthContext.googleLogin', () => {
   it('saves the token and sets the authenticated user in context', async () => {
     render(
       <AuthProvider>
-        <GoogleLoginConsumer />
+        <EmailLoginConsumer />
       </AuthProvider>,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: 'sign-in-with-google' }))
+    await userEvent.click(screen.getByRole('button', { name: 'login-with-email' }))
 
     await waitFor(() => {
-      expect(screen.getByTestId('current-user').textContent).toBe('google@example.com')
+      expect(screen.getByTestId('current-user').textContent).toBe('local@example.com')
     })
 
-    expect(api.post).toHaveBeenCalledWith('/auth/google', {
-      credential: 'id-token',
-      role: 'user',
+    expect(api.post).toHaveBeenCalledWith('/auth/login', {
+      email: 'test@example.com',
+      password: 'password123',
     })
     expect(saveSession).toHaveBeenCalledWith('jwt-token')
   })
